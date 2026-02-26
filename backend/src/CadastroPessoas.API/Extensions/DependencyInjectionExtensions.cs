@@ -1,3 +1,4 @@
+using CadastroPessoas.Application.Ports.Outbound;
 using CadastroPessoas.Application.UseCases.Endereco;
 using CadastroPessoas.Application.UseCases.PessoaFisica;
 using CadastroPessoas.Application.UseCases.PessoaJuridica;
@@ -43,6 +44,8 @@ public static class DependencyInjectionExtensions
             client.Timeout = TimeSpan.FromSeconds(10);
             client.DefaultRequestHeaders.Add("Accept", "application/json");
         });
+
+        services.AddScoped<IAuditRepository, AuditRepository>();
 
         return services;
     }

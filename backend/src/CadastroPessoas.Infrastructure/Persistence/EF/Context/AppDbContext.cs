@@ -10,6 +10,7 @@ public class AppDbContext : DbContext
     public DbSet<PessoaFisica> PessoasFisicas { get; set; }
     public DbSet<PessoaJuridica> PessoasJuridicas { get; set; }
     public DbSet<Endereco> Enderecos { get; set; }
+    public DbSet<AuditLog> AuditLogs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

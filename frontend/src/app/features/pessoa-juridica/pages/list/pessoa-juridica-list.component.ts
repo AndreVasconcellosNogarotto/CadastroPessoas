@@ -8,11 +8,12 @@ import { TagModule } from 'primeng/tag';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { PessoaJuridicaService } from '../../../../core/services/services';
 import { PessoaJuridica } from '../../../../core/models/models';
+import { MaskPipe } from 'src/app/core/pipes/mask.pipe';
 
 @Component({
   selector: 'app-pessoa-juridica-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, TableModule, ButtonModule, ConfirmDialogModule, TagModule],
+  imports: [CommonModule, RouterLink, TableModule, ButtonModule, ConfirmDialogModule, TagModule,MaskPipe],
   providers: [ConfirmationService],
   template: `
     <p-confirmDialog />
@@ -49,7 +50,7 @@ import { PessoaJuridica } from '../../../../core/models/models';
         <tr>
           <td>{{ pj.razaoSocial }}</td>
           <td>{{ pj.nomeFantasia }}</td>
-          <td>{{ pj.cnpj }}</td>
+          <td>{{ pj.cnpj | mask:'cnpj'}}</td>
           <td>{{ pj.email }}</td>
           <td>
             <p-tag

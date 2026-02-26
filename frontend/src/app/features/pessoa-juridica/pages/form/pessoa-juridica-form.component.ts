@@ -1,6 +1,12 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import {
+  ReactiveFormsModule,
+  FormBuilder,
+  FormGroup,
+  Validators,
+  AbstractControl,
+} from '@angular/forms';
 import { Router, ActivatedRoute, RouterLink } from '@angular/router';
 import { InputTextModule } from 'primeng/inputtext';
 import { CalendarModule } from 'primeng/calendar';
@@ -12,6 +18,13 @@ import { MessageService } from 'primeng/api';
 import { PessoaJuridicaService, EnderecoService } from '../../../../core/services/services';
 import { MaskPipe } from '../../../../core/pipes/mask.pipe';
 
+// ── Validator: CEP deve ter exatamente 8 dígitos ────────────────────────────
+function cepValidator(control: AbstractControl) {
+  const digits = (control.value ?? '').replace(/\D/g, '');
+  if (!digits) return null;
+  return digits.length === 8 ? null : { cepInvalido: true };
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Component({
   selector: 'app-pessoa-juridica-form',
@@ -26,8 +39,17 @@ import { MaskPipe } from '../../../../core/pipes/mask.pipe';
     CardModule,
     DividerModule,
     ProgressSpinnerModule,
-      MaskPipe,
-  ],providers: [],
+    MaskPipe,
+  ],
+  providers: [],
+  styles: [`
+    .campo-bloqueado {
+      background-color: #f5f5f5 !important;
+      color: #888 !important;
+      cursor: not-allowed !important;
+      pointer-events: none;
+    }
+  `],
   template: `
     <div class="flex align-items-center gap-2 mb-3">
       <p-button icon="pi pi-arrow-left" [text]="true" routerLink="/pessoas-juridicas" />
@@ -67,8 +89,14 @@ import { MaskPipe } from '../../../../core/pipes/mask.pipe';
             <input pInputText id="cnpj" formControlName="cnpj" class="w-full"
               maxlength="18" placeholder="00.000.000/0000-00"
               (input)="aplicarMascara('cnpj', 'cnpj')"
-              [ngClass]="{ 'ng-invalid ng-dirty': isInvalid('cnpj') }" />
+              [ngClass]="{
+                'ng-invalid ng-dirty': isInvalid('cnpj'),
+                'campo-bloqueado': isEdit
+              }" />
             <small *ngIf="isInvalid('cnpj')" class="p-error">CNPJ é obrigatório.</small>
+            <small *ngIf="isEdit" class="text-color-secondary">
+              <i class="pi pi-lock" style="font-size:0.75rem"></i> CNPJ não pode ser alterado
+            </small>
           </div>
 
           <div class="field col-12 md:col-4">
@@ -82,8 +110,12 @@ import { MaskPipe } from '../../../../core/pipes/mask.pipe';
             <label for="dataAbertura">Data de Abertura *</label>
             <p-calendar id="dataAbertura" formControlName="dataAbertura" class="w-full"
               dateFormat="dd/mm/yy" [showIcon]="true" [maxDate]="hoje"
+              [disabled]="isEdit"
               [ngClass]="{ 'ng-invalid ng-dirty': isInvalid('dataAbertura') }" />
             <small *ngIf="isInvalid('dataAbertura')" class="p-error">Data de abertura é obrigatória.</small>
+            <small *ngIf="isEdit" class="text-color-secondary">
+              <i class="pi pi-lock" style="font-size:0.75rem"></i> Data de abertura não pode ser alterada
+            </small>
           </div>
 
           <div class="field col-12 md:col-6">
@@ -121,15 +153,22 @@ import { MaskPipe } from '../../../../core/pipes/mask.pipe';
           <div class="formgrid grid">
 
             <div class="field col-12 md:col-4">
-              <label for="cep">CEP</label>
+              <label for="cep">CEP *</label>
               <div class="p-inputgroup">
                 <input pInputText id="cep" formControlName="cep"
                   maxlength="9" placeholder="00000-000"
                   (input)="aplicarMascara('cep', 'endereco.cep')"
-                  (blur)="buscarCep()" />
+                  (blur)="buscarCep()"
+                  [ngClass]="{ 'ng-invalid ng-dirty': isInvalid('endereco.cep') }" />
                 <p-button icon="pi pi-search" [loading]="buscandoCep"
                   (onClick)="buscarCep()" severity="secondary" />
               </div>
+              <small *ngIf="form.get('endereco.cep')?.hasError('required') && form.get('endereco.cep')?.touched" class="p-error">
+                CEP é obrigatório.
+              </small>
+              <small *ngIf="form.get('endereco.cep')?.hasError('cepInvalido') && form.get('endereco.cep')?.touched" class="p-error">
+                CEP inválido — informe os 8 dígitos.
+              </small>
             </div>
 
             <div class="field col-12 md:col-8">
@@ -138,8 +177,10 @@ import { MaskPipe } from '../../../../core/pipes/mask.pipe';
             </div>
 
             <div class="field col-12 md:col-2">
-              <label for="numero">Número</label>
-              <input pInputText id="numero" formControlName="numero" class="w-full" maxlength="20" />
+              <label for="numero">Número *</label>
+              <input pInputText id="numero" formControlName="numero" class="w-full" maxlength="20"
+                [ngClass]="{ 'ng-invalid ng-dirty': isInvalid('endereco.numero') }" />
+              <small *ngIf="isInvalid('endereco.numero')" class="p-error">Número é obrigatório.</small>
             </div>
 
             <div class="field col-12 md:col-4">
@@ -175,31 +216,53 @@ import { MaskPipe } from '../../../../core/pipes/mask.pipe';
   `,
 })
 export class PessoaJuridicaFormComponent implements OnInit {
-  private readonly fb = inject(FormBuilder);
-  private readonly service = inject(PessoaJuridicaService);
+  private readonly fb              = inject(FormBuilder);
+  private readonly service         = inject(PessoaJuridicaService);
   private readonly enderecoService = inject(EnderecoService);
-  private readonly messageService = inject(MessageService);
-  private readonly router = inject(Router);
-  private readonly route = inject(ActivatedRoute);
+  private readonly messageService  = inject(MessageService);
+  private readonly router          = inject(Router);
+  private readonly route           = inject(ActivatedRoute);
 
   form!: FormGroup;
-  loading = false;
-  salvando = false;
+  loading     = false;
+  salvando    = false;
   buscandoCep = false;
-  isEdit = false;
-  hoje = new Date();
+  isEdit      = false;
+  hoje        = new Date();
   private id?: string;
+
+  private readonly camposLabel: Record<string, string> = {
+    razaoSocial:        "Razão Social",
+    nomeFantasia:       "Nome Fantasia",
+    cnpj:               "CNPJ",
+    dataAbertura:       "Data de Abertura",
+    nome:               "Nome do Responsável",
+    email:              "E-mail",
+    telefone:           "Telefone",
+    "endereco.cep":     "CEP",
+    "endereco.numero":  "Número",
+  };
 
   ngOnInit(): void {
     this.buildForm();
-    this.id = this.route.snapshot.params['id'];
+    this.id    = this.route.snapshot.params['id'];
     this.isEdit = !!this.id;
 
     if (this.isEdit) {
       this.loading = true;
       this.service.obterPorId(this.id!).subscribe({
         next: (p) => {
-          this.form.patchValue({ ...p, dataAbertura: new Date(p.dataAbertura) });
+          this.form.patchValue({
+            ...p,
+            cnpj:         this.formatarCnpj(p.cnpj),
+            telefone:     this.formatarTelefone(p.telefone),
+            dataAbertura: new Date(p.dataAbertura),
+            endereco: p.endereco
+              ? { ...p.endereco, cep: this.formatarCep(p.endereco.cep) }
+              : {},
+          });
+          this.form.get('cnpj')?.disable();
+          this.form.get('dataAbertura')?.disable();
           this.loading = false;
         },
         error: () => (this.loading = false),
@@ -209,22 +272,22 @@ export class PessoaJuridicaFormComponent implements OnInit {
 
   buildForm(): void {
     this.form = this.fb.group({
-      nome: ['', [Validators.required, Validators.maxLength(200)]],
-      email: ['', [Validators.required, Validators.email, Validators.maxLength(254)]],
-      telefone: ['', [Validators.required]],
-      cnpj: ['', [Validators.required]],
-      razaoSocial: ['', [Validators.required, Validators.maxLength(300)]],
-      nomeFantasia: ['', [Validators.required, Validators.maxLength(300)]],
+      nome:              ['', [Validators.required, Validators.maxLength(200)]],
+      email:             ['', [Validators.required, Validators.email, Validators.maxLength(254)]],
+      telefone:          ['', [Validators.required]],
+      cnpj:              ['', [Validators.required]],
+      razaoSocial:       ['', [Validators.required, Validators.maxLength(300)]],
+      nomeFantasia:      ['', [Validators.required, Validators.maxLength(300)]],
       inscricaoEstadual: [''],
-      dataAbertura: [null, [Validators.required]],
+      dataAbertura:      [null, [Validators.required]],
       endereco: this.fb.group({
-        cep: [''],
-        logradouro: [''],
-        numero: [''],
+        cep:         ['', [Validators.required, cepValidator]],
+        logradouro:  [''],
+        numero:      ['', [Validators.required]],
         complemento: [''],
-        bairro: [''],
-        cidade: [''],
-        uf: [''],
+        bairro:      [''],
+        cidade:      [''],
+        uf:          [''],
       }),
     });
   }
@@ -233,6 +296,29 @@ export class PessoaJuridicaFormComponent implements OnInit {
     const control = this.form.get(field);
     return !!(control?.invalid && (control.dirty || control.touched));
   }
+
+  // ── Formatadores ──────────────────────────────────────────────────────────
+  private formatarCnpj(cnpj: string): string {
+    const d = (cnpj ?? '').replace(/\D/g, '').slice(0, 14);
+    return d
+      .replace(/(\d{2})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1/$2')
+      .replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+  }
+
+  private formatarTelefone(tel: string): string {
+    const d = (tel ?? '').replace(/\D/g, '').slice(0, 11);
+    return d.length <= 10
+      ? d.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3')
+      : d.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
+  }
+
+  private formatarCep(cep: string): string {
+    const d = (cep ?? '').replace(/\D/g, '').slice(0, 8);
+    return d.replace(/(\d{5})(\d{0,3})/, '$1-$2');
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   aplicarMascara(tipo: 'cnpj' | 'telefone' | 'cep', campo: string): void {
     const control = this.form.get(campo);
@@ -264,7 +350,7 @@ export class PessoaJuridicaFormComponent implements OnInit {
   }
 
   buscarCep(): void {
-    const cep = this.form.get('endereco.cep')?.value ?? '';
+    const cep    = this.form.get('endereco.cep')?.value ?? '';
     const digits = cep.replace(/\D/g, '');
     if (digits.length !== 8) return;
 
@@ -273,39 +359,60 @@ export class PessoaJuridicaFormComponent implements OnInit {
       next: (res) => {
         this.form.get('endereco')?.patchValue({
           logradouro: res.logradouro ?? '',
-          bairro: res.bairro ?? '',
-          cidade: res.cidade ?? '',
-          uf: res.uf ?? '',
+          bairro:     res.bairro     ?? '',
+          cidade:     res.cidade     ?? '',
+          uf:         res.uf         ?? '',
         });
         this.buscandoCep = false;
       },
-      error: () => (this.buscandoCep = false),
+      error: () => {
+        this.form.get('endereco')?.patchValue({
+          logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '',
+        });
+        this.messageService.add({
+          severity: 'warn',
+          summary:  'CEP não encontrado',
+          detail:   'Nenhum endereço foi localizado para o CEP informado. Verifique e tente novamente.',
+          life:     5000,
+        });
+        this.buscandoCep = false;
+      },
     });
   }
 
   salvar(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+
+      const faltando = Object.keys(this.camposLabel)
+        .filter((campo) => this.form.get(campo)?.invalid)
+        .map((campo) => this.camposLabel[campo]);
+
+      this.messageService.add({
+        severity: 'warn',
+        summary:  'Campos obrigatórios não preenchidos',
+        detail:   `Preencha corretamente: ${faltando.join(', ')}.`,
+        life:     6000,
+      });
       return;
     }
 
     const f = this.form.getRawValue();
     if (!f.dataAbertura) return;
 
-    const cepDigits = (f.endereco?.cep ?? '').replace(/\D/g, '');
+    const cepDigits   = (f.endereco?.cep ?? '').replace(/\D/g, '');
     const temEndereco = cepDigits.length === 8;
 
     const payload: any = {
-      nome: f.nome,
-      email: f.email,
-      telefone: (f.telefone ?? '').replace(/\D/g, ''),
-      cnpj: (f.cnpj ?? '').replace(/\D/g, ''),
-      razaoSocial: f.razaoSocial,
-      nomeFantasia: f.nomeFantasia,
-      dataAbertura: (f.dataAbertura as Date).toISOString(),
+      nome:              f.nome,
+      email:             f.email,
+      telefone:          (f.telefone ?? '').replace(/\D/g, ''),
+      cnpj:              (f.cnpj     ?? '').replace(/\D/g, ''),
+      razaoSocial:       f.razaoSocial,
+      nomeFantasia:      f.nomeFantasia,
+      inscricaoEstadual: f.inscricaoEstadual ?? '',
+      dataAbertura:      (f.dataAbertura as Date).toISOString(),
     };
-
-    payload.inscricaoEstadual = f.inscricaoEstadual ?? '';
 
     if (temEndereco) {
       payload.endereco = { cep: cepDigits };
@@ -326,8 +433,8 @@ export class PessoaJuridicaFormComponent implements OnInit {
       next: () => {
         this.messageService.add({
           severity: 'success',
-          summary: 'Sucesso',
-          detail: `Pessoa jurídica ${this.isEdit ? 'atualizada' : 'criada'} com sucesso.`,
+          summary:  'Sucesso',
+          detail:   `Pessoa jurídica ${this.isEdit ? 'atualizada' : 'criada'} com sucesso.`,
         });
         this.router.navigate(['/pessoas-juridicas']);
       },

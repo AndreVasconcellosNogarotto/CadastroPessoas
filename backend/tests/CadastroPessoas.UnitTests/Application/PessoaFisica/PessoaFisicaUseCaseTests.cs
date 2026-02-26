@@ -1,5 +1,7 @@
 using CadastroPessoas.Application.DTOs.Request;
+using CadastroPessoas.Application.Ports.Outbound;
 using CadastroPessoas.Application.UseCases.PessoaFisica;
+using CadastroPessoas.Domain.Entities;
 using CadastroPessoas.Domain.Exceptions;
 using CadastroPessoas.Domain.Ports.Outbound;
 using FluentAssertions;
@@ -16,13 +18,14 @@ public class PessoaFisicaUseCaseTests
     private readonly Mock<IPessoaFisicaRepository> _repositoryMock = new();
     private readonly Mock<IEnderecoRepository> _enderecoRepositoryMock = new();
     private readonly Mock<ILogger<PessoaFisicaUseCase>> _loggerMock = new();
+    private readonly Mock<IAuditRepository> _auditRepositoryMock = new();
     private readonly PessoaFisicaUseCase _useCase;
 
     private const string CpfValido = "52998224725";
 
     public PessoaFisicaUseCaseTests()
     {
-        _useCase = new PessoaFisicaUseCase(_repositoryMock.Object, _enderecoRepositoryMock.Object, _loggerMock.Object);
+        _useCase = new PessoaFisicaUseCase(_repositoryMock.Object, _enderecoRepositoryMock.Object, _loggerMock.Object, _auditRepositoryMock.Object);
     }
 
     private static CreatePessoaFisicaRequest CriarRequest(string cpf = CpfValido) =>
@@ -127,10 +130,13 @@ public class PessoaFisicaUseCaseTests
 
         _repositoryMock.Setup(r => r.GetByIdAsync(pf.Id, default)).ReturnsAsync(pf);
         _repositoryMock.Setup(r => r.DeleteAsync(It.IsAny<PessoaFisicaEntity>(), default)).Returns(Task.CompletedTask);
+        _auditRepositoryMock.Setup(r => r.RegistrarAsync(It.IsAny<AuditLog>(), default)).Returns(Task.CompletedTask);
 
         await _useCase.DeletarAsync(pf.Id);
 
         _repositoryMock.Verify(r => r.DeleteAsync(It.IsAny<PessoaFisicaEntity>(), default), Times.Once);
+        _auditRepositoryMock.Verify(r => r.RegistrarAsync(It.IsAny<AuditLog>(), default), Times.Once);
+
     }
 
     [Fact]

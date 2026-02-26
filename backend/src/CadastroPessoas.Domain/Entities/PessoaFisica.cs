@@ -31,15 +31,11 @@ public class PessoaFisica : Pessoa
 
     private void SetCpf(string cpf)
     {
-        if (string.IsNullOrWhiteSpace(cpf))
-            throw new DomainException("CPF não pode ser vazio.");
+        var cpfDigits = (cpf ?? "").Replace(".", "").Replace("-", "").Trim();
 
-        var cpfLimpo = cpf.Replace(".", "").Replace("-", "").Trim();
+        ValidarCpf(cpfDigits);
 
-        if (!ValidarCpf(cpfLimpo))
-            throw new DomainException("CPF inválido.");
-
-        Cpf = cpfLimpo;
+        Cpf = cpfDigits;
     }
 
     private void SetDataNascimento(DateTime dataNascimento)
@@ -55,10 +51,16 @@ public class PessoaFisica : Pessoa
 
     public int Idade => (int)((DateTime.UtcNow - DataNascimento).TotalDays / 365.25);
 
-    private static bool ValidarCpf(string cpf)
+    private static void ValidarCpf(string cpf)
     {
-        if (cpf.Length != 11) return false;
-        if (cpf.Distinct().Count() == 1) return false;
+        if (string.IsNullOrWhiteSpace(cpf) || !cpf.All(char.IsDigit))
+            throw new DomainException("CPF inválido."); 
+
+        if (cpf.Length != 11)
+            throw new DomainException("CPF inválido.");
+
+        if (cpf.Distinct().Count() == 1)
+            throw new DomainException("CPF inválido.");
 
         var soma = 0;
         for (var i = 0; i < 9; i++)
@@ -67,7 +69,8 @@ public class PessoaFisica : Pessoa
         var resto = soma % 11;
         var digito1 = resto < 2 ? 0 : 11 - resto;
 
-        if (int.Parse(cpf[9].ToString()) != digito1) return false;
+        if (int.Parse(cpf[9].ToString()) != digito1)
+            throw new DomainException("CPF inválido.");
 
         soma = 0;
         for (var i = 0; i < 10; i++)
@@ -76,6 +79,7 @@ public class PessoaFisica : Pessoa
         resto = soma % 11;
         var digito2 = resto < 2 ? 0 : 11 - resto;
 
-        return int.Parse(cpf[10].ToString()) == digito2;
+        if (int.Parse(cpf[10].ToString()) != digito2)
+            throw new DomainException("CPF inválido.");
     }
 }

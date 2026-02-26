@@ -1,5 +1,7 @@
 using CadastroPessoas.Application.DTOs.Request;
 using CadastroPessoas.Application.DTOs.Response;
+using CadastroPessoas.Application.Ports.Outbound;
+using CadastroPessoas.Domain.Entities;
 using CadastroPessoas.Domain.Exceptions;
 using CadastroPessoas.Domain.Ports.Inbound;
 using CadastroPessoas.Domain.Ports.Outbound;
@@ -12,13 +14,16 @@ public class PessoaFisicaUseCase : IPessoaFisicaUseCase
     private readonly IPessoaFisicaRepository _repository;
     private readonly IEnderecoRepository _enderecoRepository;
     private readonly ILogger<PessoaFisicaUseCase> _logger;
+    private readonly IAuditRepository _auditRepository;
 
 
-    public PessoaFisicaUseCase(IPessoaFisicaRepository repository, IEnderecoRepository enderecoRepository, ILogger<PessoaFisicaUseCase> logger)
+    public PessoaFisicaUseCase(IPessoaFisicaRepository repository, IEnderecoRepository enderecoRepository, ILogger<PessoaFisicaUseCase> logger, IAuditRepository auditRepository)
     {
         _repository = repository;
         _enderecoRepository = enderecoRepository;
         _logger = logger;
+        _auditRepository = auditRepository;
+
     }
 
     public async Task<PessoaFisicaResponse> CriarAsync(CreatePessoaFisicaRequest request, CancellationToken cancellationToken = default)
@@ -121,13 +126,15 @@ public class PessoaFisicaUseCase : IPessoaFisicaUseCase
 
         return MapToResponse(pessoaFisica);
     }
-
     public async Task DeletarAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var pessoaFisica = await _repository.GetByIdAsync(id, cancellationToken)
-            ?? throw new NotFoundException($"Pessoa Física com id '{id}' não encontrada.");
+        var pessoa = await _repository.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException($"Pessoa Física com Id '{id}' não encontrada.");
 
-        await _repository.DeleteAsync(pessoaFisica, cancellationToken);
+        await _repository.DeleteAsync(pessoa, cancellationToken);
+
+        var audit = new AuditLog(pessoa.Id, "PessoaFisica");
+        await _auditRepository.RegistrarAsync(audit, cancellationToken);
     }
 
     private static PessoaFisicaResponse MapToResponse(Domain.Entities.PessoaFisica p) =>

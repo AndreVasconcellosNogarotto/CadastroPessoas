@@ -8,11 +8,12 @@ import { TagModule } from 'primeng/tag';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { PessoaFisicaService } from '../../../../core/services/services';
 import { PessoaFisica } from '../../../../core/models/models';
+import { MaskPipe } from 'src/app/core/pipes/mask.pipe';
 
 @Component({
   selector: 'app-pessoa-fisica-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, TableModule, ButtonModule, ConfirmDialogModule, TagModule],
+  imports: [CommonModule, RouterLink, TableModule, ButtonModule, ConfirmDialogModule, TagModule,MaskPipe],
   providers: [ConfirmationService],
   template: `
     <p-confirmDialog />
@@ -49,9 +50,9 @@ import { PessoaFisica } from '../../../../core/models/models';
       <ng-template pTemplate="body" let-pessoa>
         <tr>
           <td>{{ pessoa.nome }}</td>
-          <td>{{ pessoa.cpf }}</td>
+          <td>{{ pessoa.cpf | mask:'cpf'}}</td>
           <td>{{ pessoa.email }}</td>
-          <td>{{ pessoa.telefone }}</td>
+          <td>{{ pessoa.telefone | mask:'telefone' }}</td>
           <td>{{ pessoa.idade }} anos</td>
           <td>
             <p-tag

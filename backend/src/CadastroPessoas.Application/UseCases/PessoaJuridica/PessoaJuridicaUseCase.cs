@@ -1,5 +1,6 @@
 using CadastroPessoas.Application.DTOs.Request;
 using CadastroPessoas.Application.DTOs.Response;
+using CadastroPessoas.Application.Ports.Outbound;
 using CadastroPessoas.Domain.Entities;
 using CadastroPessoas.Domain.Exceptions;
 using CadastroPessoas.Domain.Ports.Inbound;
@@ -11,11 +12,15 @@ public class PessoaJuridicaUseCase : IPessoaJuridicaUseCase
 {
     private readonly IPessoaJuridicaRepository _repository;
     private readonly IEnderecoRepository _enderecoRepository;
+    private readonly IAuditRepository _auditRepository;
 
-    public PessoaJuridicaUseCase(IPessoaJuridicaRepository repository, IEnderecoRepository enderecoRepository)
+
+    public PessoaJuridicaUseCase(IPessoaJuridicaRepository repository, IEnderecoRepository enderecoRepository, IAuditRepository auditRepository)
     {
         _repository = repository;
         _enderecoRepository = enderecoRepository;
+        _auditRepository = auditRepository;
+
     }
 
     public async Task<PessoaJuridicaResponse> CriarAsync(CreatePessoaJuridicaRequest request, CancellationToken cancellationToken = default)
@@ -117,11 +122,13 @@ public class PessoaJuridicaUseCase : IPessoaJuridicaUseCase
     public async Task DeletarAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var pj = await _repository.GetByIdAsync(id, cancellationToken)
-            ?? throw new NotFoundException($"Pessoa Jurídica com id '{id}' não encontrada.");
+            ?? throw new NotFoundException($"Pessoa Jurídica com Id '{id}' não encontrada.");
 
         await _repository.DeleteAsync(pj, cancellationToken);
-    }
 
+        var audit = new AuditLog(pj.Id, "PessoaJuridica");
+        await _auditRepository.RegistrarAsync(audit, cancellationToken);
+    }
     private static PessoaJuridicaResponse MapToResponse(Domain.Entities.PessoaJuridica pj) =>
         new(
             pj.Id, pj.Nome, pj.Email, pj.Telefone, pj.Cnpj,

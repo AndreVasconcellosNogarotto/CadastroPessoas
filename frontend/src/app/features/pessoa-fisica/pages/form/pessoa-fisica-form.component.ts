@@ -5,6 +5,7 @@ import {
   FormBuilder,
   FormGroup,
   Validators,
+  AbstractControl,
 } from "@angular/forms";
 import { Router, ActivatedRoute, RouterLink } from "@angular/router";
 import { InputTextModule } from "primeng/inputtext";
@@ -14,12 +15,16 @@ import { CardModule } from "primeng/card";
 import { DividerModule } from "primeng/divider";
 import { ProgressSpinnerModule } from "primeng/progressspinner";
 import { MessageService } from "primeng/api";
-import { MaskPipe } from '../../../../core/pipes/mask.pipe';
+import { MaskPipe } from "../../../../core/pipes/mask.pipe";
+import { PessoaFisicaService, EnderecoService } from "../../../../core/services/services";
 
-import {
-  PessoaFisicaService,
-  EnderecoService,
-} from "../../../../core/services/services";
+// ── Validator: CEP deve ter exatamente 8 dígitos ────────────────────────────
+function cepValidator(control: AbstractControl) {
+  const digits = (control.value ?? "").replace(/\D/g, "");
+  if (!digits) return null;                   // opcional — só valida se preenchido
+  return digits.length === 8 ? null : { cepInvalido: true };
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Component({
   selector: "app-pessoa-fisica-form",
@@ -34,15 +39,20 @@ import {
     CardModule,
     DividerModule,
     ProgressSpinnerModule,
-      MaskPipe,
-  ],providers: [],
+    MaskPipe,
+  ],
+  providers: [],
+  styles: [`
+    .campo-bloqueado {
+      background-color: #f5f5f5 !important;
+      color: #888 !important;
+      cursor: not-allowed !important;
+      pointer-events: none;
+    }
+  `],
   template: `
     <div class="flex align-items-center gap-2 mb-3">
-      <p-button
-        icon="pi pi-arrow-left"
-        [text]="true"
-        routerLink="/pessoas-fisicas"
-      />
+      <p-button icon="pi pi-arrow-left" [text]="true" routerLink="/pessoas-fisicas" />
       <h2 class="m-0">{{ isEdit ? "Editar" : "Nova" }} Pessoa Física</h2>
     </div>
 
@@ -53,238 +63,164 @@ import {
     <form *ngIf="!loading" [formGroup]="form" (ngSubmit)="salvar()">
       <p-card header="Dados Pessoais" styleClass="mb-3">
         <div class="formgrid grid">
+
           <div class="field col-12 md:col-6">
             <label for="nome">Nome *</label>
-            <input
-              pInputText
-              id="nome"
-              formControlName="nome"
-              class="w-full"
-              maxlength="200"
-              [ngClass]="{ 'ng-invalid ng-dirty': isInvalid('nome') }"
-            />
+            <input pInputText id="nome" formControlName="nome" class="w-full" maxlength="200"
+              [ngClass]="{ 'ng-invalid ng-dirty': isInvalid('nome') }" />
             <div class="flex justify-content-between">
-              <small *ngIf="isInvalid('nome')" class="p-error"
-                >Nome é obrigatório.</small
-              >
-              <small class="text-color-secondary ml-auto"
-                >{{ form.get("nome")?.value?.length || 0 }}/200</small
-              >
+              <small *ngIf="isInvalid('nome')" class="p-error">Nome é obrigatório.</small>
+              <small class="text-color-secondary ml-auto">{{ form.get("nome")?.value?.length || 0 }}/200</small>
             </div>
           </div>
 
           <div class="field col-12 md:col-6">
             <label for="cpf">CPF *</label>
-            <input
-              pInputText
-              id="cpf"
-              formControlName="cpf"
-              class="w-full"
-              maxlength="14"
-              placeholder="000.000.000-00"
+            <input pInputText id="cpf" formControlName="cpf" class="w-full"
+              maxlength="14" placeholder="000.000.000-00"
               (input)="aplicarMascara('cpf', 'cpf')"
-              [ngClass]="{ 'ng-invalid ng-dirty': isInvalid('cpf') }"
-            />
-            <small *ngIf="isInvalid('cpf')" class="p-error"
-              >CPF é obrigatório.</small
-            >
+              [ngClass]="{
+                'ng-invalid ng-dirty': isInvalid('cpf'),
+                'campo-bloqueado': isEdit
+              }" />
+            <small *ngIf="isInvalid('cpf')" class="p-error">CPF é obrigatório.</small>
+            <small *ngIf="isEdit" class="text-color-secondary">
+              <i class="pi pi-lock" style="font-size:0.75rem"></i> CPF não pode ser alterado
+            </small>
           </div>
 
           <div class="field col-12 md:col-6">
             <label for="email">E-mail *</label>
-            <input
-              pInputText
-              id="email"
-              formControlName="email"
-              class="w-full"
-              type="email"
-              maxlength="254"
-              [ngClass]="{ 'ng-invalid ng-dirty': isInvalid('email') }"
-            />
-            <small *ngIf="isInvalid('email')" class="p-error"
-              >E-mail inválido.</small
-            >
+            <input pInputText id="email" formControlName="email" class="w-full"
+              type="email" maxlength="254"
+              [ngClass]="{ 'ng-invalid ng-dirty': isInvalid('email') }" />
+            <small *ngIf="isInvalid('email')" class="p-error">E-mail inválido.</small>
           </div>
 
           <div class="field col-12 md:col-6">
             <label for="telefone">Telefone *</label>
-            <input
-              pInputText
-              id="telefone"
-              formControlName="telefone"
-              class="w-full"
-              maxlength="15"
-              placeholder="(00) 00000-0000"
+            <input pInputText id="telefone" formControlName="telefone" class="w-full"
+              maxlength="15" placeholder="(00) 00000-0000"
               (input)="aplicarMascara('telefone', 'telefone')"
-              [ngClass]="{ 'ng-invalid ng-dirty': isInvalid('telefone') }"
-            />
-            <small *ngIf="isInvalid('telefone')" class="p-error"
-              >Telefone é obrigatório.</small
-            >
+              [ngClass]="{ 'ng-invalid ng-dirty': isInvalid('telefone') }" />
+            <small *ngIf="isInvalid('telefone')" class="p-error">Telefone é obrigatório.</small>
           </div>
 
           <div class="field col-12 md:col-6">
             <label for="dataNascimento">Data de Nascimento *</label>
-            <p-calendar
-              id="dataNascimento"
-              formControlName="dataNascimento"
-              class="w-full"
-              dateFormat="dd/mm/yy"
-              [showIcon]="true"
-              [maxDate]="hoje"
-              [ngClass]="{ 'ng-invalid ng-dirty': isInvalid('dataNascimento') }"
-            />
-            <small *ngIf="isInvalid('dataNascimento')" class="p-error"
-              >Data de nascimento é obrigatória.</small
-            >
+            <p-calendar id="dataNascimento" formControlName="dataNascimento" class="w-full"
+              dateFormat="dd/mm/yy" [showIcon]="true" [maxDate]="hoje"
+              [ngClass]="{ 'ng-invalid ng-dirty': isInvalid('dataNascimento') }" />
+            <small *ngIf="isInvalid('dataNascimento')" class="p-error">Data de nascimento é obrigatória.</small>
           </div>
 
           <div class="field col-12 md:col-6">
             <label for="rg">RG</label>
-            <input
-              pInputText
-              id="rg"
-              formControlName="rg"
-              class="w-full"
-              maxlength="20"
-              placeholder="Opcional"
-            />
-            <small class="text-color-secondary"
-              >{{ form.get("rg")?.value?.length || 0 }}/20</small
-            >
+            <input pInputText id="rg" formControlName="rg" class="w-full"
+              maxlength="20" placeholder="Opcional" />
+            <small class="text-color-secondary">{{ form.get("rg")?.value?.length || 0 }}/20</small>
           </div>
+
         </div>
       </p-card>
 
       <p-card header="Endereço" styleClass="mb-3">
         <ng-container formGroupName="endereco">
           <div class="formgrid grid">
+
             <div class="field col-12 md:col-4">
-              <label for="cep">CEP</label>
+              <label for="cep">CEP *</label>
               <div class="p-inputgroup">
-                <input
-                  pInputText
-                  id="cep"
-                  formControlName="cep"
-                  maxlength="9"
-                  placeholder="00000-000"
+                <input pInputText id="cep" formControlName="cep"
+                  maxlength="9" placeholder="00000-000"
                   (input)="aplicarMascara('cep', 'endereco.cep')"
                   (blur)="buscarCep()"
-                />
-                <p-button
-                  icon="pi pi-search"
-                  [loading]="buscandoCep"
-                  (onClick)="buscarCep()"
-                  severity="secondary"
-                />
+                  [ngClass]="{ 'ng-invalid ng-dirty': isInvalid('endereco.cep') }" />
+                <p-button icon="pi pi-search" [loading]="buscandoCep"
+                  (onClick)="buscarCep()" severity="secondary" />
               </div>
+              <small *ngIf="form.get('endereco.cep')?.hasError('required') && form.get('endereco.cep')?.touched" class="p-error">
+                CEP é obrigatório.
+              </small>
+              <small *ngIf="form.get('endereco.cep')?.hasError('cepInvalido') && form.get('endereco.cep')?.touched" class="p-error">
+                CEP inválido — informe os 8 dígitos.
+              </small>
             </div>
 
             <div class="field col-12 md:col-8">
               <label for="logradouro">Logradouro</label>
-              <input
-                pInputText
-                id="logradouro"
-                formControlName="logradouro"
-                class="w-full"
-                maxlength="200"
-              />
+              <input pInputText id="logradouro" formControlName="logradouro" class="w-full" maxlength="200" />
             </div>
 
             <div class="field col-12 md:col-2">
-              <label for="numero">Número</label>
-              <input
-                pInputText
-                id="numero"
-                formControlName="numero"
-                class="w-full"
-                maxlength="20"
-              />
+              <label for="numero">Número *</label>
+              <input pInputText id="numero" formControlName="numero" class="w-full" maxlength="20"
+                [ngClass]="{ 'ng-invalid ng-dirty': isInvalid('endereco.numero') }" />
+              <small *ngIf="isInvalid('endereco.numero')" class="p-error">Número é obrigatório.</small>
             </div>
 
             <div class="field col-12 md:col-4">
               <label for="complemento">Complemento</label>
-              <input
-                pInputText
-                id="complemento"
-                formControlName="complemento"
-                class="w-full"
-                maxlength="100"
-              />
+              <input pInputText id="complemento" formControlName="complemento" class="w-full" maxlength="100" />
             </div>
 
             <div class="field col-12 md:col-6">
               <label for="bairro">Bairro</label>
-              <input
-                pInputText
-                id="bairro"
-                formControlName="bairro"
-                class="w-full"
-                maxlength="100"
-              />
+              <input pInputText id="bairro" formControlName="bairro" class="w-full" maxlength="100" />
             </div>
 
             <div class="field col-12 md:col-8">
               <label for="cidade">Cidade</label>
-              <input
-                pInputText
-                id="cidade"
-                formControlName="cidade"
-                class="w-full"
-                maxlength="100"
-              />
+              <input pInputText id="cidade" formControlName="cidade" class="w-full" maxlength="100" />
             </div>
 
             <div class="field col-12 md:col-4">
               <label for="uf">UF</label>
-              <input
-                pInputText
-                id="uf"
-                formControlName="uf"
-                class="w-full"
-                maxlength="2"
-                style="text-transform: uppercase"
-              />
+              <input pInputText id="uf" formControlName="uf" class="w-full" maxlength="2"
+                style="text-transform: uppercase" />
             </div>
+
           </div>
         </ng-container>
       </p-card>
 
       <div class="flex gap-2 justify-content-end">
-        <p-button
-          label="Cancelar"
-          severity="secondary"
-          routerLink="/pessoas-fisicas"
-        />
-        <p-button
-          label="Salvar"
-          type="submit"
-          [loading]="salvando"
-          icon="pi pi-check"
-        />
+        <p-button label="Cancelar" severity="secondary" routerLink="/pessoas-fisicas" />
+        <p-button label="Salvar" type="submit" [loading]="salvando" icon="pi pi-check" />
       </div>
     </form>
   `,
 })
 export class PessoaFisicaFormComponent implements OnInit {
-  private readonly fb = inject(FormBuilder);
-  private readonly service = inject(PessoaFisicaService);
+  private readonly fb              = inject(FormBuilder);
+  private readonly service         = inject(PessoaFisicaService);
   private readonly enderecoService = inject(EnderecoService);
-  private readonly messageService = inject(MessageService);
-  private readonly router = inject(Router);
-  private readonly route = inject(ActivatedRoute);
+  private readonly messageService  = inject(MessageService);
+  private readonly router          = inject(Router);
+  private readonly route           = inject(ActivatedRoute);
 
   form!: FormGroup;
-  loading = false;
-  salvando = false;
+  loading     = false;
+  salvando    = false;
   buscandoCep = false;
-  isEdit = false;
-  hoje = new Date();
+  isEdit      = false;
+  hoje        = new Date();
   private id?: string;
+
+  // Mapa de labels amigáveis para cada campo
+  private readonly camposLabel: Record<string, string> = {
+    nome:               "Nome",
+    email:              "E-mail",
+    telefone:           "Telefone",
+    cpf:                "CPF",
+    dataNascimento:     "Data de Nascimento",
+    "endereco.cep":     "CEP",
+    "endereco.numero":  "Número",
+  };
 
   ngOnInit(): void {
     this.buildForm();
-    this.id = this.route.snapshot.params["id"];
+    this.id    = this.route.snapshot.params["id"];
     this.isEdit = !!this.id;
 
     if (this.isEdit) {
@@ -293,8 +229,14 @@ export class PessoaFisicaFormComponent implements OnInit {
         next: (p) => {
           this.form.patchValue({
             ...p,
+            cpf:            this.formatarCpf(p.cpf),
+            telefone:       this.formatarTelefone(p.telefone),
             dataNascimento: new Date(p.dataNascimento),
+            endereco: p.endereco
+              ? { ...p.endereco, cep: this.formatarCep(p.endereco.cep) }
+              : {},
           });
+          this.form.get("cpf")?.disable();
           this.loading = false;
         },
         error: () => (this.loading = false),
@@ -304,23 +246,20 @@ export class PessoaFisicaFormComponent implements OnInit {
 
   buildForm(): void {
     this.form = this.fb.group({
-      nome: ["", [Validators.required, Validators.maxLength(200)]],
-      email: [
-        "",
-        [Validators.required, Validators.email, Validators.maxLength(254)],
-      ],
-      telefone: ["", [Validators.required]],
-      cpf: ["", [Validators.required]],
+      nome:           ["", [Validators.required, Validators.maxLength(200)]],
+      email:          ["", [Validators.required, Validators.email, Validators.maxLength(254)]],
+      telefone:       ["", [Validators.required]],
+      cpf:            ["", [Validators.required]],
       dataNascimento: [null, [Validators.required]],
-      rg: [""],
+      rg:             [""],
       endereco: this.fb.group({
-        cep: [""],
-        logradouro: [""],
-        numero: [""],
+        cep:         ["", [Validators.required, cepValidator]],
+        logradouro:  [""],
+        numero:      ["", [Validators.required]],
         complemento: [""],
-        bairro: [""],
-        cidade: [""],
-        uf: [""],
+        bairro:      [""],
+        cidade:      [""],
+        uf:          [""],
       }),
     });
   }
@@ -330,29 +269,43 @@ export class PessoaFisicaFormComponent implements OnInit {
     return !!(control?.invalid && (control.dirty || control.touched));
   }
 
-  aplicarMascara(
-    tipo: "cpf" | "cnpj" | "telefone" | "cep",
-    campo: string,
-  ): void {
+  // ── Formatadores ──────────────────────────────────────────────────────────
+  private formatarCpf(cpf: string): string {
+    const d = (cpf ?? "").replace(/\D/g, "").slice(0, 11);
+    return d.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, "$1.$2.$3-$4");
+  }
+
+  private formatarTelefone(tel: string): string {
+    const d = (tel ?? "").replace(/\D/g, "").slice(0, 11);
+    return d.length <= 10
+      ? d.replace(/(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3")
+      : d.replace(/(\d{2})(\d{5})(\d{0,4})/, "($1) $2-$3");
+  }
+
+  private formatarCep(cep: string): string {
+    const d = (cep ?? "").replace(/\D/g, "").slice(0, 8);
+    return d.replace(/(\d{5})(\d{0,3})/, "$1-$2");
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  aplicarMascara(tipo: "cpf" | "telefone" | "cep", campo: string): void {
     const control = this.form.get(campo);
     if (!control) return;
-    const digits = (control.value ?? "").replaceAll(/\D/g, "");
+    const digits = (control.value ?? "").replace(/\D/g, "");
     let formatted = digits;
 
     switch (tipo) {
       case "cpf":
-        formatted = digits
-          .slice(0, 11)
+        formatted = digits.slice(0, 11)
           .replace(/(\d{3})(\d)/, "$1.$2")
           .replace(/(\d{3})(\d)/, "$1.$2")
           .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
         break;
       case "telefone": {
         const t = digits.slice(0, 11);
-        formatted =
-          t.length <= 10
-            ? t.replace(/(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3")
-            : t.replace(/(\d{2})(\d{5})(\d{0,4})/, "($1) $2-$3");
+        formatted = t.length <= 10
+          ? t.replace(/(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3")
+          : t.replace(/(\d{2})(\d{5})(\d{0,4})/, "($1) $2-$3");
         break;
       }
       case "cep":
@@ -364,8 +317,8 @@ export class PessoaFisicaFormComponent implements OnInit {
   }
 
   buscarCep(): void {
-    const cep = this.form.get("endereco.cep")?.value ?? "";
-    const digits = cep.replaceAll(/\D/g, "");
+    const cep    = this.form.get("endereco.cep")?.value ?? "";
+    const digits = cep.replace(/\D/g, "");
     if (digits.length !== 8) return;
 
     this.buscandoCep = true;
@@ -373,59 +326,82 @@ export class PessoaFisicaFormComponent implements OnInit {
       next: (res) => {
         this.form.get("endereco")?.patchValue({
           logradouro: res.logradouro ?? "",
-          bairro: res.bairro ?? "",
-          cidade: res.cidade ?? "",
-          uf: res.uf ?? "",
+          bairro:     res.bairro     ?? "",
+          cidade:     res.cidade     ?? "",
+          uf:         res.uf         ?? "",
         });
         this.buscandoCep = false;
       },
-      error: () => (this.buscandoCep = false),
+      error: () => {
+        this.form.get("endereco")?.patchValue({
+          logradouro: "", numero: "", complemento: "", bairro: "", cidade: "", uf: "",
+        });
+        this.messageService.add({
+          severity: "warn",
+          summary:  "CEP não encontrado",
+          detail:   "Nenhum endereço foi localizado para o CEP informado. Verifique e tente novamente.",
+          life:     5000,
+        });
+        this.buscandoCep = false;
+      },
     });
   }
 
   salvar(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+
+      // Monta lista dos campos obrigatórios não preenchidos
+      const faltando = Object.keys(this.camposLabel)
+        .filter((campo) => this.form.get(campo)?.invalid)
+        .map((campo) => this.camposLabel[campo]);
+
+      this.messageService.add({
+        severity: "warn",
+        summary:  "Campos obrigatórios não preenchidos",
+        detail:   `Preencha corretamente: ${faltando.join(", ")}.`,
+        life:     6000,
+      });
       return;
     }
 
     const f = this.form.getRawValue();
     if (!f.dataNascimento) return;
 
-const cepDigits = ((f.endereco?.cep) ?? '').replaceAll(/\D/g, '');
+    const cepDigits   = (f.endereco?.cep ?? "").replace(/\D/g, "");
     const temEndereco = cepDigits.length === 8;
 
     const payload: any = {
-      nome: f.nome,
-      email: f.email,
-      telefone: (f.telefone ?? "").replaceAll(/\D/g, ""),
-      cpf: (f.cpf ?? "").replaceAll(/\D/g, ""),
+      nome:           f.nome,
+      email:          f.email,
+      telefone:       (f.telefone ?? "").replace(/\D/g, ""),
+      cpf:            (f.cpf      ?? "").replace(/\D/g, ""),
       dataNascimento: (f.dataNascimento as Date).toISOString(),
-      rg: f.rg || null,
-      endereco: temEndereco
+      rg:             f.rg || null,
+      endereco:       temEndereco
         ? {
-            cep: cepDigits,
-            logradouro: f.endereco.logradouro || null,
-            numero: f.endereco.numero || null,
+            cep:         cepDigits,
+            logradouro:  f.endereco.logradouro  || null,
+            numero:      f.endereco.numero      || null,
             complemento: f.endereco.complemento || null,
-            bairro: f.endereco.bairro || null,
-            cidade: f.endereco.cidade || null,
-            uf: f.endereco.uf || null,
+            bairro:      f.endereco.bairro      || null,
+            cidade:      f.endereco.cidade      || null,
+            uf:          f.endereco.uf          || null,
           }
         : null,
     };
 
     this.salvando = true;
     const req$ = this.isEdit
-      ? this.service.atualizar(this.id!, payload as any)
-      : this.service.criar(payload as any);
+      ? this.service.atualizar(this.id!, payload)
+      : this.service.criar(payload);
 
     req$.subscribe({
       next: () => {
         this.messageService.add({
           severity: "success",
-          summary: "Sucesso",
-          detail: `Pessoa física ${this.isEdit ? "atualizada" : "criada"} com sucesso.`,
+          summary:  "Sucesso",
+          detail:   `Pessoa física ${this.isEdit ? "atualizada" : "criada"} com sucesso.`,
         });
         this.router.navigate(["/pessoas-fisicas"]);
       },

@@ -38,8 +38,38 @@ public class ExceptionHandlingMiddleware
             _ => (HttpStatusCode.InternalServerError, "InternalServerError", "Ocorreu um erro interno no servidor.")
         };
 
-        if (statusCode == HttpStatusCode.InternalServerError)
-            _logger.LogError(exception, "Erro não tratado.");
+        var requestPath = context.Request.Path;
+        var requestMethod = context.Request.Method;
+        var requestId = context.TraceIdentifier;
+
+        switch (statusCode)
+        {
+            case HttpStatusCode.BadRequest:
+                _logger.LogWarning(
+                    "[{RequestId}] DomainError em {Method} {Path} → {Message}",
+                    requestId, requestMethod, requestPath, exception.Message);
+                break;
+
+            case HttpStatusCode.NotFound:
+                _logger.LogWarning(
+                    "[{RequestId}] NotFound em {Method} {Path} → {Message}",
+                    requestId, requestMethod, requestPath, exception.Message);
+                break;
+
+            case HttpStatusCode.Conflict:
+                _logger.LogWarning(
+                    "[{RequestId}] Conflict em {Method} {Path} → {Message}",
+                    requestId, requestMethod, requestPath, exception.Message);
+                break;
+
+            default:
+                _logger.LogError(
+                    exception,
+                    "[{RequestId}] Erro não tratado em {Method} {Path} → {ExceptionType}: {Message}",
+                    requestId, requestMethod, requestPath,
+                    exception.GetType().Name, exception.Message);
+                break;
+        }
 
         var response = new ErrorResponse(type, message);
 
